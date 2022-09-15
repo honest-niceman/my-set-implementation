@@ -1,35 +1,68 @@
 package org.example;
 
+import org.openjdk.jmh.annotations.*;
+import org.openjdk.jmh.runner.Runner;
+import org.openjdk.jmh.runner.RunnerException;
+import org.openjdk.jmh.runner.options.Options;
+import org.openjdk.jmh.runner.options.OptionsBuilder;
+
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
+@BenchmarkMode(Mode.AverageTime)
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@State(Scope.Benchmark)
+@Fork(value = 2, jvmArgs = {"-Xms4G", "-Xmx4G"})
+@Warmup(iterations = 3)
+@Measurement(iterations = 8)
 public class Main {
-    public static void main(String[] args) {
-        int[] arr1 = new int[300_000];
-        int[] arr2 = new int[300_000];
+
+    public static final int SIZE = 10_000_000;
+
+    public static void main(String[] args) throws RunnerException {
+        Options opt = new OptionsBuilder()
+                .include(Main.class.getSimpleName())
+                .forks(1)
+                .build();
+
+        new Runner(opt).run();
+    }
+
+    private int[] arr1 = new int[SIZE];
+    private int[] arr2 = new int[SIZE];
+
+    @Setup
+    public void setup() {
         Random random = new Random();
-        System.out.println("Start");
         for (int i = 0; i < arr1.length; i++) {
             arr1[i] = random.nextInt();
-//            arr1[i] = i;
         }
-        System.out.println("Arr1 has been initialized");
         for (int i = 0; i < arr2.length; i++) {
             arr2[i] = random.nextInt();
-//            arr2[i] = i;
         }
-        System.out.println("Arr2 has been initialized");
-        Main s = new Main();
-        long t1 = System.currentTimeMillis();
-        int[] result1 = s.findIntersection(arr1, arr2);
-        long t2 = System.currentTimeMillis();
-        System.out.println((t2 - t1) + ", " + result1.length);
-        t1 = System.currentTimeMillis();
-        int[] result2 = s.findIntersectionMySet(arr1, arr2);
-        t2 = System.currentTimeMillis();
-        System.out.println((t2 - t1) + ", " + result2.length);
+    }
+
+    @Benchmark
+    public void JavaHashSet() {
+        findIntersection(arr1, arr2);
+    }
+
+    @Benchmark
+    public void SetWithoutRecursion() {
+        findIntersectionWithoutRecursion(arr1, arr2);
+    }
+
+    @Benchmark
+    public void MyHashSet() {
+        findIntersectionMySet(arr1, arr2);
+    }
+
+    @Benchmark
+    public void AndrewHashSet() {
+        findIntersectionAndrewSet(arr1, arr2);
     }
 
     public int[] findIntersection(int[] arr1, int[] arr2) {
@@ -68,71 +101,39 @@ public class Main {
         return Arrays.copyOf(result, j);
     }
 
-    public static class MySet<T> {
-        private final T[] values;
-        private final int[] indexes;
-
-        public MySet(int size) {
-            values = (T[]) new Object[size];
-            indexes = new int[size];
-            Arrays.fill(indexes, -1);
+    public int[] findIntersectionAndrewSet(int[] arr1, int[] arr2) {
+        if (arr1.length > arr2.length) {
+            return findIntersectionMySet(arr2, arr1);
         }
-
-        public void add(T element) {
-            if (contains(element)) {
-                return;
-            }
-            int i = Math.abs((Integer) element % values.length);
-            int index = findIndToPaste(i);
-            values[index] = element;
+        AndrewSet<Integer> set = new AndrewSet<>(arr1.length);
+        int[] result = new int[arr1.length];
+        for (int i = 0; i < arr1.length; i++) {
+            set.addVal(arr1[i]);
         }
-
-        public boolean contains(T element) {
-            int index = Math.abs((Integer) element % values.length);
-            if (values[index] == null) {
-                return false;
+        int j = 0;
+        for (int i = 0; i < arr2.length; i++) {
+            if (set.contains(arr2[i])) {
+                result[j++] = arr2[i];
             }
-            if (values[index].equals(element)) {
-                return true;
-            }
-            int nextIndex = indexes[index];
-            return recursiveCheck(element, values[index], nextIndex);
         }
+        return Arrays.copyOf(result, j);
+    }
 
-        private boolean recursiveCheck(T element, T nextToCompare, int index) {
-            if (element.equals(nextToCompare)) {
-                return true;
-            }
-            if (index == -1) {
-                return false;
-            }
-            int nextIndex = indexes[index];
-            return recursiveCheck(element, values[index], nextIndex);
+    public int[] findIntersectionWithoutRecursion(int[] arr1, int[] arr2) {
+        if (arr1.length > arr2.length) {
+            return findIntersectionMySet(arr2, arr1);
         }
-
-        private int findIndToPaste(int index) {
-            if (indexes[index] != -1) {
-                int nextIndex = indexes[index];
-                return findIndToPaste(nextIndex);
-            }
-            if (values[index] == null) {
-                return index;
-            }
-            for (int i = 0; i < values.length; i++) {
-                if (values[i] == null) {
-                    indexes[index] = i;
-                    return i;
-                }
-            }
-            return -0;
+        SetWithoutRecursion<Integer> set = new SetWithoutRecursion<>(arr1.length);
+        int[] result = new int[arr1.length];
+        for (int i = 0; i < arr1.length; i++) {
+            set.addVal(arr1[i]);
         }
-
-        @Override
-        public String toString() {
-            return "MySet{" +
-                    "values=" + Arrays.toString(values) +
-                    ", indexes=" + Arrays.toString(indexes) +
-                    '}';
+        int j = 0;
+        for (int i = 0; i < arr2.length; i++) {
+            if (set.contains(arr2[i])) {
+                result[j++] = arr2[i];
+            }
         }
+        return Arrays.copyOf(result, j);
     }
 }
